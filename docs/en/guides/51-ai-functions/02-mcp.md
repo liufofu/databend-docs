@@ -79,8 +79,8 @@ import logging
 import sys
 
 from agno.agent import Agent
-from agno.playground import Playground
-from agno.storage.sqlite import SqliteStorage
+from agno.os.app import AgentOS
+from agno.db.sqlite import SqliteDb
 from agno.tools.mcp import MCPTools
 from agno.models.deepseek import DeepSeek
 from fastapi import FastAPI
@@ -144,7 +144,7 @@ agent = Agent(
         "Format query results in clear, readable tables.",
         "Provide insights and explanations with your analysis."
     ],
-    storage=SqliteStorage(table_name="chatbi", db_file="chatbi.db"),
+    db=SqliteDb(db_file="chatbi.db"),
     add_datetime_to_instructions=True,
     add_history_to_messages=True,
     num_history_responses=5,
@@ -167,18 +167,18 @@ async def lifespan(app: FastAPI):
     if databend.mcp:
         await databend.mcp.close()
 
-playground = Playground(
+agent_os = AgentOS(
     agents=[agent],
     name="ChatBI with Databend",
     description="Business Intelligence Assistant powered by Databend"
 )
 
-app = playground.get_app(lifespan=lifespan)
+app = agent_os.get_app()
 
 if __name__ == "__main__":
     print("🤖 Starting MCP Server for Databend")
     print("Open http://localhost:7777 to start chatting!")
-    playground.serve(app="agent:app", host="127.0.0.1", port=7777)
+    agent_os.serve(app="agent:app", host="127.0.0.1", port=7777)
 
 ```
 
