@@ -79,8 +79,8 @@ import logging
 import sys
 
 from agno.agent import Agent
-from agno.playground import Playground
-from agno.storage.sqlite import SqliteStorage
+from agno.os.app import AgentOS
+from agno.db.sqlite import SqliteDb
 from agno.tools.mcp import MCPTools
 from agno.models.deepseek import DeepSeek
 from fastapi import FastAPI
@@ -90,20 +90,20 @@ logger = logging.getLogger(__name__)
 
 def check_env_vars():
     required = {
-        "DATABEND_DSN": "https://docs.databend.com/developer/drivers/#connection-string-dsn",
+        "DATABEND_DSN": "https://docs.databend.cn/developer/drivers/#connection-string-dsn",
         "DEEPSEEK_API_KEY": "https://platform.deepseek.com/api_keys"
     }
 
     missing = [var for var in required if not os.getenv(var)]
 
     if missing:
-        print("❌ Missing environment variables:")
+        print("❌ 缺少环境变量：")
         for var in missing:
             print(f"  • {var}: {required[var]}")
-        print("\nExample: export DATABEND_DSN='...' DEEPSEEK_API_KEY='...'")
+        print("\n示例：export DATABEND_DSN='...' DEEPSEEK_API_KEY='...'")
         sys.exit(1)
 
-    print("✅ Environment variables OK")
+    print("✅ 环境变量检查通过")
 
 check_env_vars()
 
@@ -125,10 +125,10 @@ class DatabendTool:
     async def init(self):
         try:
             await self.mcp.connect()
-            logger.info("✓ Connected to Databend")
+            logger.info("✓ 已连接到 Databend")
             return True
         except Exception as e:
-            logger.error(f"✗ Databend connection failed: {e}")
+            logger.error(f"✗ Databend 连接失败：{e}")
             return False
 
 databend = DatabendTool()
@@ -138,47 +138,48 @@ agent = Agent(
     model=DeepSeek(),
     tools=[],
     instructions=[
-        "You are ChatBI - a Business Intelligence assistant for Databend.",
-        "Help users explore and analyze their data using natural language.",
-        "Always start by exploring available databases and tables.",
-        "Format query results in clear, readable tables.",
-        "Provide insights and explanations with your analysis."
+        "你是 ChatBI - 专为 Databend 打造的商业智能助手。",
+        "帮助用户使用自然语言探索和分析数据。",
+        "始终从探索可用数据库和表开始。",
+        "将查询结果格式化为清晰易读的表格。",
+        "在分析中提供见解和解释。"
     ],
-    storage=SqliteStorage(table_name="chatbi", db_file="chatbi.db"),
-    add_datetime_to_instructions=True,
-    add_history_to_messages=True,
-    num_history_responses=5,
+    db=SqliteDb(db_file="chatbi.db"),
+    add_datetime_to_context=True,
+    add_history_to_context=True,
+    num_history_runs=5,
     markdown=True,
-    show_tool_calls=True,
 )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     tool = databend.create()
     if not await databend.init():
-        logger.error("Failed to initialize Databend")
-        raise RuntimeError("Databend connection failed")
+        logger.error("初始化 Databend 失败")
+        raise RuntimeError("Databend 连接失败")
 
     agent.tools.append(tool)
-    logger.info("ChatBI initialized successfully")
+    logger.info("ChatBI 初始化成功")
 
     yield
 
     if databend.mcp:
         await databend.mcp.close()
 
-playground = Playground(
+agent_os = AgentOS(
     agents=[agent],
     name="ChatBI with Databend",
-    description="Business Intelligence Assistant powered by Databend"
+    description="由 Databend 驱动的商业智能助手",
+    lifespan=lifespan,
 )
 
-app = playground.get_app(lifespan=lifespan)
+app = agent_os.get_app()
 
 if __name__ == "__main__":
-    print("🤖 Starting MCP Server for Databend")
-    print("Open http://localhost:7777 to start chatting!")
-    playground.serve(app="agent:app", host="127.0.0.1", port=7777)
+    print("🤖 正在为 Databend 启动 MCP Server")
+    print("打开 http://localhost:7777 开始聊天！")
+    agent_os.serve(app="agent:app", host="127.0.0.1", port=7777)
+
 
 ```
 
